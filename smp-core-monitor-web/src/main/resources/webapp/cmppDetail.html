@@ -1,0 +1,346 @@
+
+
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<meta charset="UTF-8">
+		<title>cmpp内核展示</title>
+	</head>
+	<style>
+		.cmppConfig {
+			height: 250px;
+			border: 1px solid #000;
+			width: 500px;
+		}
+		
+		.messageConfig {
+			height: 350px;
+			border: 1px solid #000;
+			width: 500px;
+		}
+		
+		.console {
+			width: 700px;
+			border: 1px solid #000;
+			height: 450px;
+		}
+		table tr td {
+			height: 20px;
+		}
+		
+		
+	</style>
+
+	<body>
+		<h3>cmpp内部配置</h3>
+		<div class="cmppConfig">
+			hostIP:<input class="hostIP" id="ip" type="text" value="" readonly="readonly" /><br/> 
+			port:<input class="port" id="port"type="text" value="" readonly="readonly" /><br/> 
+			spId:<input class="spId" id="userName"type="text" value="" readonly="readonly" /><br/> 
+			password:<input class="password" id="password"type="text" value="" readonly="readonly" /><br/> 
+			srcId:<input class="srcId" id="srcId"type="text" value="" readonly="readonly" /><br/> 
+			serviceId:<input class="serviceId" id="serviceId"type="text" value="" readonly="readonly" /><br/> 
+			groupName:<input class="groupName" id="groupName"type="text" value="" readonly="readonly" /><br/> 
+			msgSrc:<input class="msgSrc" id="msgSrc"type="text" value="" readonly="readonly" /><br/> 
+			cmppVersion:<input class="cmppVersion" id="cmppVersion"type="text" value="" readonly="readonly" /><br/>
+			<br />
+			<br /><br /><br />
+			<h3>短信配置</h3>
+			<div class="messageConfig">
+				请输入短信内容：<input id = "messageContent" class="messageContent" name="" type="text" />
+				<br /> 请输入要传送的手机号码(以英文逗号分隔)
+				<textarea class="phoneNum" id="phonesNum" name="phonesNum" style="width: 400px;height: 200px"></textarea>
+				<br /> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+				<input type="button" name="sendMessage" id="sendMessage" value="发送" /> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+				<input type="button" name="pauseOrGoon" id="pauseOrGoon" value="暂停发送" /> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+				<input type="hidden" id="pauseHiddenVal" name="pauseHiddenVal" value="0" />
+				<!--<input type="button" name="break" id="break" value="中断任务" />-->
+			</div>
+			<br /><br /><br />
+			<h3>控制台</h3>
+			<div class="console">
+				<br />	
+				&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="button" id="showTasking" name="showTasking" value="当前任务队列"/>
+				<br /><br />
+				<h4>当前任务情况：</h4>
+				<table border="1">
+					<tr>
+						<th>平均速度</th>
+						<th>成功速度</th>
+						<th>最大速度</th>
+						<th>最小速度</th>
+						<th>成功数量</th>
+						<th>失败数量</th>
+						<th>待发送短信数量</th>
+					</tr>
+					<tr>
+						<td id ="averageRate"></td>
+						<td id ="successRate"></td>
+						<td id ="maxRate"></td>
+						<td id ="minRate"></td>
+						<td id ="ismgPushSuccessNum"></td>
+						<td id = "failCount"></td>
+						<td id ="toBeSendMessageNum"></td>
+					</tr>
+
+				</table>
+				<div>
+					<textarea id="responseText" style="width: 400px;height: 250px;"></textarea>
+				</div>
+			</div>
+		</div>
+	</body>
+	<script type="text/javascript" src="http://localhost:9989/monitor-web/js/jquery-1.8.3.js"></script>
+	<script type="application/javascript">
+		var basepath="http://localhost:9989/monitor-web/";
+		var path = basepath+"servlet/taskqueueServlet";
+	</script>
+	<script type="application/javascript">
+	/**
+	 * cmpp内部配置
+	 * 获取cmppConfig.properties文件中的各个配置
+	 * */
+	$(document).ready(function(){
+  	$.ajax(
+  		{
+  			url:path,
+  			data:{
+  				method:"cmppConfigshow"
+  			},
+  			success: function (data) {
+  			var out = JSON.parse(data);
+  			//返回json结果
+  			$.each(out, function(index ,result) {
+  				if(index==='body'){
+  					var body = JSON.parse(result);
+  					$.each(body, function(idx ,res) {
+  							$("#"+idx).val(res);
+  					});
+  				}
+  			});     	
+    	}
+	})
+		})
+	</script>
+	
+<script type="application/javascript">
+		/**
+		 * 发送按钮
+		 * */
+		$("#sendMessage").click(function(){
+  				var messageContent  = $("#messageContent").val();
+  				var phonesNum =$("#phonesNum").val();
+  				if (checkBeforeSend(messageContent,phonesNum)){
+  					$.ajax({
+  					url:path,
+  					data:{
+  						method:"start2Send",
+  						messageContent:messageContent,
+  						phonesNum:phonesNum
+  					},
+  					success:function(data){
+  						var result=JSON.parse(data);
+  							if(result.body ==="1"){
+								alert("任务添加任务队列成功!");
+								connection();
+  							}else{
+  								alert("任务添加不成功！");
+  							}
+  					}
+  				});
+  				}else{
+  					alert("请正确输入消息内容和短信消息！");
+  				}	
+		});
+
+		/**
+		 * 暂停or继续任务
+		 * 暂停:队列任务，只能暂停尙没执行的任务。
+		 * 继续：继续执行队列中的任务。
+		 * */
+		$("#pauseOrGoon").click(function(){
+			var method ;
+			var val;
+			var text;
+			var pauseHiddenVal = $("#pauseHiddenVal").val();
+			if(pauseHiddenVal ==='0'){//1表示已暂停，0表示没暂停
+				method="pauseTask";
+				val="1";
+				text="继续任务";
+			}else{
+				method="taskContinue";
+				val="0";	
+				text="暂停任务";
+			}
+			$.ajax({
+  					url:path,
+  					data:{
+  						method:method,
+  					},
+  					success:function(data){
+  						var result=JSON.parse(data);
+  							if(result.body==="1"){
+  							$("#pauseHiddenVal").val(val);
+  							$("#pauseOrGoon").val(text);
+  							}			
+  					}
+  				});
+			})
+		
+			/**
+			 * 清除所有执行任务。
+			 * */
+			$("#break").click(function(){
+			$.ajax({
+  					url:path,
+  					data:{
+  						method:"cancelNowTask",
+  						flag:"false"
+  					},
+  					success:function(data){
+  						var result=JSON.parse(data);
+  							if(result.body==="1"){
+  								alert("中断完成！");
+  							}		
+  						}
+  				});
+			})
+		
+		
+		
+	 		/**
+	     	* 查看任务队列的情况
+	     	*/
+     		$("#showTasking").click(function(){
+			$.ajax({
+  					url:path,
+  					data:{
+  						method:"showQueueTask"
+  					},
+  					success:function(data){
+  						var result=JSON.parse(data);
+  							if(result.body!=="0"){
+  								alert(result.body);
+  							}				
+  					}
+  				});
+			})
+     	
+     	
+     	/**
+     	 * 停止定时器
+     	 * */
+     	function stopCircleWebSocket(intervalProcess){
+   			clearInterval(intervalProcess);
+		}
+     	
+     	
+ /***webSocket start ***/
+var count = 0;
+var maxConnectTimes=200;
+var socket ;
+var timeout;
+/**
+ * 尝试进行webSocket 连接
+ * */
+var connection = function() {
+    var url = "ws://localhost:8889/ws";
+    socket = new WebSocket(url);
+    socket.onopen = onopen;
+    socket.onmessage = onmessage;
+    socket.onclose = onclose;
+    socket.onerror = onerror;
+}
+
+/**
+ * webSocket重新连接
+ * */
+var reconnection = function() {
+    // count = count+1;
+    // console.log("reconnection...【" + count + "】");
+    //1与服务器已经建立连接
+    if (count >= maxConnectTimes || socket.readyState == 1) {
+        clearTimeout(timeout);
+    } else {
+        //2已经关闭了与服务器的连接
+        if (socket.readyState == 3) {
+            connection();
+        }
+        //0正尝试与服务器建立连接,2正在关闭与服务器的连接
+        timeout = setTimeout(function() {reconnection();}, 500);
+    }
+}	
+
+	var onopen = function() {
+    var ta = document.getElementById("responseText");
+	ta.value = "连接开启";
+	maxConnectTimes=200;
+	}
+	var onclose = function() {
+		var ta = document.getElementById("responseText");
+		ta.value = ta.value + "\n" + "连接关闭";
+		reconnection();
+	}
+	var onmessage = function(e) {
+	    var ta = document.getElementById("responseText");
+	    //判断为json字符串
+	    if(isJSON(e.data)){
+	    var result = JSON.parse(e.data);
+	    if(result.type==='reportEntity'){
+	    $.each(result, function(index,info) {
+	    if(index!=='reportEntity'){
+	    	$("#"+index).html(info);
+	    	}
+	    });
+	    }
+	    }
+	    
+		ta.value = ta.value + event.data + "\n";
+	}
+	var onerror = function() {
+    	var ta = document.getElementById("responseText");
+		ta.value = ta.value + "\n" + "连接失败";
+    	reconnection();
+}
+      /************webSocketStop************/     	
+     	
+     	
+     	
+     	/**
+     	 * 判断是否为字json 字符串
+     	 * */
+     	function isJSON(str) {
+        if (typeof str == 'string') {
+            try {
+                var obj=JSON.parse(str);
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+ 	}　
+     	/**
+     	 * 发送前的检查号码和发送内容
+     	 * */
+     	function checkBeforeSend(messageContent,phonesNum){
+     	var flag = true ;
+     	//是否为空
+     		if(messageContent == null || messageContent == "" || messageContent == undefined){
+    			flag = false;}
+     		if(phonesNum == null || phonesNum == "" || phonesNum == undefined){
+    			flag = false;}
+     	//格式	
+     		 var pattern = /^1[34578]\d{9}$/; 
+     		 var phone = phonesNum.split(",")
+     		$.each(phone, function(idx ,res) {
+     		if(!pattern.test(res)){
+     				flag =  false;
+     		}	
+  			});
+			return flag;
+     	}
+</script>
+
+
+</html>
