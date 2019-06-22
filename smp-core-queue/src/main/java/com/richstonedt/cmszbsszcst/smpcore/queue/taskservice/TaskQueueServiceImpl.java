@@ -3,7 +3,6 @@ package com.richstonedt.cmszbsszcst.smpcore.queue.taskservice;
 
 import com.richstonedt.cmszbsszcst.smpcore.queue.SumbitMessageDetail;
 
-import java.sql.Timestamp;
 import java.util.Date;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -56,10 +55,9 @@ public class TaskQueueServiceImpl extends TaskQueueService {
     }
 
      public static void main(String[] args) {
-          for (int i = 0; i < 500; i++) {
+          for (int i = 0; i < 100; i++) {
               BlockingQueue queue = phoneNum();
               new TaskQueueServiceImpl().excute("7654321", queue);
-              System.out.println("Max memory "+Runtime.getRuntime().maxMemory());
           }
       }
 

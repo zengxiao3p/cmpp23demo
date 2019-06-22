@@ -2,36 +2,20 @@
 
 package com.richstonedt.cmszbsszcst.smpcore.core.cmpp3.cmppsubmit.sumbithandler;
 
-import com.richstonedt.cmszbsszcst.smpcore.core.cmpp3.common.CmppConfig;
-import com.zx.sms.BaseMessage;
 import com.zx.sms.codec.cmpp.msg.*;
-import com.zx.sms.common.util.ChannelUtil;
-import com.zx.sms.common.util.MsgId;
-import com.zx.sms.connect.manager.ClientEndpoint;
-import com.zx.sms.connect.manager.EndpointManager;
-import com.zx.sms.connect.manager.EventLoopGroupFactory;
-import com.zx.sms.connect.manager.ExitUnlimitCirclePolicy;
-import com.zx.sms.connect.manager.cmpp.CMPPEndpointEntity;
 import com.zx.sms.handler.api.AbstractBusinessHandler;
 import com.zx.sms.session.cmpp.SessionState;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.Promise;
 
 //import org.apache.commons.lang.StringUtils;
 //import org.apache.commons.lang.math.RandomUtils;
-import org.apache.commons.lang3.RandomUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.concurrent.*;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * 此类为短信发送业务核心处理类，根据消息体的电话号码，短信内容发送。
@@ -79,6 +63,9 @@ public class SessionConnectedHandler extends AbstractBusinessHandler implements 
         return (String) phone.poll(10, TimeUnit.MILLISECONDS);
     }
 
+    public SessionConnectedHandler() {
+    }
+
     public SessionConnectedHandler(int totleCnt, BlockingQueue<String> phone,
                                    Thread thread, String contentMessage, AtomicInteger flag) {
         this.totleCnt = new AtomicInteger(totleCnt);
@@ -94,87 +81,8 @@ public class SessionConnectedHandler extends AbstractBusinessHandler implements 
     @Override
     public void userEventTriggered(final ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt == SessionState.Connect) {
-            final CMPPEndpointEntity finalentity = (CMPPEndpointEntity) getEndpointEntity();
-            final Channel ch = ctx.channel();
-            //创建定时任务
-            EventLoopGroupFactory.INS.submitUnlimitCircleTask(new Callable<Boolean>() {
-                private BaseMessage createMessage(String content, String destterminalId) {
-                    CmppSubmitRequestMessage msg = new CmppSubmitRequestMessage();
-                    if (finalentity instanceof ClientEndpoint) {
-                        msg.setDestterminalId(destterminalId);
-                        msg.setLinkID(CmppConfig.getLinkID());
-                        msg.setMsgContent(content);
-                        msg.setRegisteredDelivery((short) 1);
-                        msg.setMsgid(new MsgId());
-                        msg.setServiceId(CmppConfig.getServiceId());
-                        msg.setSrcId(CmppConfig.getSrcId());
-                        msg.setMsgsrc(CmppConfig.getMsgSrc());
-                    }
-                    return msg;
-                }
-
-                @Override
-                public Boolean call() throws Exception {
-                    int cnt = RandomUtils.nextInt() & 0x4ff;
-                    while (cnt > 0 && totleCnt.get() > 0) {
-                        if (ctx.channel().isWritable()) {
-                            String phone = get();
-                            if (StringUtils.isEmpty(phone)) {
-                                break;
-                            }
-                            List<Promise<BaseMessage>> futures = ChannelUtil.syncWriteLongMsgToEntity(
-                                    getEndpointEntity().getId(), createMessage(contentMessage, phone));
-                            try {
-                                for (Promise future : futures) {
-                                    future.await(60, TimeUnit.SECONDS);
-                                    if (!future.isSuccess()) {
-                                        LOGGER.error("syncWriteLongMsgToEntity error cause by:{}",
-                                                SessionConnectedHandler.class, future.cause());
-                                    }
-                                }
-                                cnt--;
-                                totleCnt.decrementAndGet();
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                cnt--;
-                                totleCnt.decrementAndGet();
-                                break;
-                            }
-                        } else if (!ctx.channel().isActive()) {
-                            break;
-                        } else {
-                            Thread.sleep(10);
-                        }
-                    }
-                    return true;
-                }
-            }, new ExitUnlimitCirclePolicy() {
-                @Override
-                public boolean notOver(Future future) {
-                    boolean over = ch.isActive() && totleCnt.get() > 0;
-                    if (!over) {
-                        LOGGER.info("=========send over===========:{}", Thread.currentThread().getName());
-                        //当前发送任务结束，此时应该释放锁，让主线程继续执行。
-                        int cnt = RandomUtils.nextInt() & 0x4ff;
-                        if (cnt > 0 && flag.get() > 0) {
-                            LOGGER.debug("-------openlock release start-------");
-                            flag.decrementAndGet();
-                            EndpointManager.INS.stopConnectionCheckTask();
-                            try {
-                                Thread.sleep(3500);
-                                openLock(thread);
-                                Thread.sleep(1500);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                            LOGGER.debug("-------openlock release end----------");
-                        }
-                    }
-                    return over;
-                }
-            }, 1);
+            ctx.fireUserEventTriggered(evt);
         }
-        ctx.fireUserEventTriggered(evt);
     }
 
     @Override
@@ -231,13 +139,5 @@ public class SessionConnectedHandler extends AbstractBusinessHandler implements 
     public SessionConnectedHandler clone() throws CloneNotSupportedException {
         SessionConnectedHandler ret = (SessionConnectedHandler) super.clone();
         return ret;
-    }
-
-    /**
-     * 释放锁，将flag置为0
-     */
-    private synchronized void openLock(Thread thread) {
-        flag.set(0);
-        LockSupport.unpark(thread);
     }
 }

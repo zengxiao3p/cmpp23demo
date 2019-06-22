@@ -11,11 +11,11 @@
 	<artifactId>smp-core-monitor-web</artifactId>
 
 	<dependencies>
-		<dependency>
+		<!--<dependency>
 			<groupId>com.richstonedt.cmszbs-szcst</groupId>
 			<artifactId>smp-core-queue</artifactId>
 			<version>1.0.0-RELEASES</version>
-		</dependency>
+		</dependency>-->
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
