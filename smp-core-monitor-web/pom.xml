@@ -73,7 +73,7 @@
 					<artifactId>commons-codec</artifactId>
 				</exclusion>
 			</exclusions>
-			<version>4.5.2</version>
+			<version>4.5.13</version>
 		</dependency>
 
 		<dependency>
